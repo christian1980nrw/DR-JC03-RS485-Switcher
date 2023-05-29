@@ -10,7 +10,7 @@ I set my battery to ID1 (first DIP switch ON).
 
 Copy everything to /data/ and chmod it to executable.
 
-Setup your switchable sockets (Shelly Plus S or AVM DECT switchable sockets) at turnon.sh and turnoff.sh.
+Setup your switchable sockets (Shelly Plug S or AVM DECT switchable sockets) at turnon.sh and turnoff.sh.
 
 Setup the correct USB-Port at /data/soc_switcher.py. The command  "dmesg | grep tty" is usable to find it out.
 I was using the RJ45 to RS485 USB adapter that came with the battery.
