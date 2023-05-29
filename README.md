@@ -7,7 +7,7 @@ and turns on switchable sockets depending SOC.
 # Installation (tested with Victron Venus OS)
 Copy everything to /data/ and chmod it to executable.
 
-Setup your switchable sockets (Shelly Plus S or AVM DECT switchabel sockets) at turnon.sh and turnoff.sh.
+Setup your switchable sockets (Shelly Plus S or AVM DECT switchable sockets) at turnon.sh and turnoff.sh.
 
 Setup the correct USB-Port at /data/soc_switcher.py. I was using the RJ45 to RS485 USB adapter that came with the battery.
 Test the script with /usr/bin/python /data/soc_switcher.py
