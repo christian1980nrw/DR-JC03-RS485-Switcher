@@ -5,6 +5,9 @@ and turns on switchable sockets depending SOC.
 ![grafik](https://github.com/christian1980nrw/DR-JC03-RS485-Switcher/assets/6513794/2275e2c6-9a4b-402a-8502-5c86416cda18)
 
 # Installation (tested with Victron Venus OS)
+
+I set my battery to ID1 (first DIP switch ON).
+
 Copy everything to /data/ and chmod it to executable.
 
 Setup your switchable sockets (Shelly Plus S or AVM DECT switchable sockets) at turnon.sh and turnoff.sh.
