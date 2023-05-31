@@ -2,7 +2,7 @@
 Script that reads out SOC, voltage and current of a DR-JC03 BMS (RS485 with the delivered RJ45 Adapter)
 and turns on switchable sockets depending voltage or SOC.
 
-![grafik](https://github.com/christian1980nrw/DR-JC03-RS485-Switcher/assets/6513794/2275e2c6-9a4b-402a-8502-5c86416cda18)
+![grafik](https://github.com/christian1980nrw/DR-JC03-RS485-Switcher/assets/6513794/1cf3100c-3362-421b-b357-3cc3c7047307)
 
 # Installation (tested with Victron Venus OS)
 
