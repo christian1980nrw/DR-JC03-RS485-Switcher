@@ -53,6 +53,9 @@ heater = HEATER_OFF
 sent = b'~22014A42E00201FD28\r'
 ser_port = '/dev/ttyUSB0'
 
+# Wait for the system to be started
+time.sleep(5)
+
 # Stop serial communication on the specified port (Victron Venus OS specific)
 subprocess.call(['/opt/victronenergy/serial-starter/stop-tty.sh', ser_port])
 
@@ -62,11 +65,11 @@ time.sleep(2)
 # Open the serial port for communication
 ser = serial.Serial(ser_port, 9600)
 
-HEATER_OFF_SOC_THRESHOLD = 97.5  # Threshold for turning off the heater depending on SOC
+HEATER_OFF_SOC_THRESHOLD = 97.5   # Threshold for turning off the heater depending on SOC
 HEATER_ON_SOC_THRESHOLD = 99.75   # Threshold for turning on the heater based on SOC
-HEATER_OFF_VOLT_THRESHOLD = 54.0  # Threshold for turning off the heater depending on voltage
-HEATER_ON_VOLT_THRESHOLD = 54.5   # Threshold for turning on the heater based on voltage
-use_SOC_for_control = False  # Flag to determine if SOC should be used for control, set to False to use voltage
+HEATER_OFF_VOLT_THRESHOLD = 52.85 # Threshold for turning off the heater depending on voltage
+HEATER_ON_VOLT_THRESHOLD = 54.4   # Threshold for turning on the heater based on voltage
+use_SOC_for_control = False       # Flag to determine if SOC should be used for control, set to False to use voltage
 # Note: Use of voltage is recommended because the DR-JC03 sometimes shows wrong SOC values especially if the last full cycle is long ago.
 
 is_turned_on = False  # Flag to track if turn on script has been executed
