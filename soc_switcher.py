@@ -125,18 +125,28 @@ while True:
 
     if valid_data == 1:
         data = rcv[13:len(rcv)-5]
-        SOC = int(data[2:6], base=16) / 100
-        voltage = int(data[6:10], base=16) / 100
+        SOC = int(data[2:6], base=16) / 100 # 15
+        voltage = int(data[6:10], base=16) / 100 # 19
         current = int(data[106:110], base=16)
+        mos_temp = int(data[84:88], base=16) / 10
+        env_temp = int(data[76:80], base=16) / 10
         if current > 32767:
             current = -(32768-(current - 32768))
         current /= 100
         logging.info('--------------------------------')
-        logging.info('SOC:     {}%'.format(SOC))
-        logging.info('Voltage: {}V'.format(voltage))
-        logging.info('Current: {}A'.format(current))
+        logging.info('SOC:      {}%'.format(SOC))
+        logging.info('Voltage:  {}V'.format(voltage))
+        logging.info('Current:  {}A'.format(current))
+        logging.info('MOS Temp: {}°C'.format(mos_temp))
+        logging.info('Env Temp: {}°C'.format(env_temp))
         logging.info('--------------------------------')
-
+        # Extract cell voltages
+        cell_voltages = []
+        for i in range(1, 17):
+            cell_voltage = int(data[(i - 1) * 4 + 12: i * 4 + 12], base=16) / 1000
+            cell_voltages.append(cell_voltage)
+            logging.info('Cell {}: {}V'.format(i, cell_voltage))
+            
         # Check if the heater is already off based on SOC or voltage
         if (heater == HEATER_OFF) and (previous_SOC > HEATER_OFF_SOC_THRESHOLD) and (previous_VOLT > HEATER_OFF_VOLT_THRESHOLD) and (use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD) and not is_turned_off:
             logging.info('Heater OFF.')
