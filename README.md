@@ -1,5 +1,5 @@
 # DR-JC03-RS485-Switcher
-Script that reads out SOC, voltage and current of a DR-JC03 BMS (RS485 with the delivered RJ45 Adapter)
+Script that reads out SOC, voltage and current of a DR-JC03 BMS / Protocol DR-1363 (RS485 with the delivered RJ45 Adapter)
 and turns on switchable sockets depending voltage or SOC.
 
 ![grafik](https://github.com/christian1980nrw/DR-JC03-RS485-Switcher/assets/6513794/1cf3100c-3362-421b-b357-3cc3c7047307)
