@@ -67,7 +67,7 @@ ser = serial.Serial(ser_port, 9600)
 
 HEATER_OFF_SOC_THRESHOLD = 97.5   # Threshold for turning off the heater depending on SOC
 HEATER_ON_SOC_THRESHOLD = 99.75   # Threshold for turning on the heater based on SOC
-HEATER_OFF_VOLT_THRESHOLD = 52.85 # Threshold for turning off the heater depending on voltage
+HEATER_OFF_VOLT_THRESHOLD = 53.4  # Threshold for turning off the heater depending on voltage
 HEATER_ON_VOLT_THRESHOLD = 54.4   # Threshold for turning on the heater based on voltage
 use_SOC_for_control = False       # Flag to determine if SOC should be used for control, set to False to use voltage
 # Note: Use of voltage is recommended because the DR-JC03 sometimes shows wrong SOC values especially if the last full cycle is long ago.
@@ -125,15 +125,17 @@ while True:
 
     if valid_data == 1:
         data = rcv[13:len(rcv)-5]
-        SOC = int(data[2:6], base=16) / 100 # 15
-        voltage = int(data[6:10], base=16) / 100 # 19
+        SOC = int(data[2:6], base=16) / 100
+        voltage = int(data[6:10], base=16) / 100
         current = int(data[106:110], base=16)
         mos_temp = int(data[84:88], base=16) / 10
         env_temp = int(data[76:80], base=16) / 10
+        capacity = int(data[124:128], base=16) / 100
         if current > 32767:
             current = -(32768-(current - 32768))
         current /= 100
         logging.info('--------------------------------')
+        logging.info('Capacity: {}Ah remaining'.format(capacity))
         logging.info('SOC:      {}%'.format(SOC))
         logging.info('Voltage:  {}V'.format(voltage))
         logging.info('Current:  {}A'.format(current))
