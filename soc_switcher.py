@@ -128,9 +128,13 @@ while True:
         SOC = int(data[2:6], base=16) / 100
         voltage = int(data[6:10], base=16) / 100
         current = int(data[106:110], base=16)
-        mos_temp = int(data[84:88], base=16) / 10
-        env_temp = int(data[76:80], base=16) / 10
-        capacity = int(data[124:128], base=16) / 100
+        mos_temp = int(data[84:88], base=16) / 10 #98
+        env_temp = int(data[76:80], base=16) / 10 #90
+        temp1 = int(data[90:94], base=16) / 10 #104
+        temp2 = int(data[94:98], base=16) / 10 #108
+        temp3 = int(data[98:102], base=16) / 10 #112
+        temp4 = int(data[102:106], base=16) / 10 #116
+        capacity = int(data[124:128], base=16) / 100 #138
         if current > 32767:
             current = -(32768-(current - 32768))
         current /= 100
@@ -141,6 +145,10 @@ while True:
         logging.info('Current:  {}A'.format(current))
         logging.info('MOS Temp: {}°C'.format(mos_temp))
         logging.info('Env Temp: {}°C'.format(env_temp))
+        logging.info('Temp 1:   {}°C'.format(temp1))
+        logging.info('Temp 2:   {}°C'.format(temp2))
+        logging.info('Temp 3:   {}°C'.format(temp3))
+        logging.info('Temp 4:   {}°C'.format(temp4))
         logging.info('--------------------------------')
         # Extract cell voltages
         cell_voltages = []
