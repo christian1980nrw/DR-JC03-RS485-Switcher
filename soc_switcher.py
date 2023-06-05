@@ -242,7 +242,9 @@ while True:
         previous_SOC = SOC  # Store current SOC as previous SOC
         previous_VOLT = voltage  # Store current voltage as previous voltage
 
-        sent_index = sent_index + 1 if not valid_data_received else 0  # Move to the next index in the sent list
+        sent_index = sent_index if valid_data_received else sent_index + 1  # Use the same index if valid data has been received, else use next index
+        sent_index = sent_index % len(sent)  # Ensuring sent_index is within the range
+
 
     ser.close()
     time.sleep(120)
