@@ -75,10 +75,11 @@ sent_index = 0
 heater = HEATER_OFF
 sent = [
     '~22014A42E00201FD28\r',
-    '~22014A4D0000FD8E\r',
-    '~22014A510000FDA0\r',
-    '~22014A47E00201FD23\r',
     '~22014A42E00201FD28\r'
+    '~22014A42E00201FD28\r' # Try 3 times the normal request, maybe there was only a fragmented packet.
+    '~22014A4D0000FD8E\r', # Use 3 different requests like the original windows software is doing (maybe BMS reset?)
+    '~22014A510000FDA0\r',
+    '~22014A47E00201FD23\r', # start from the beginning after this
 ]
 ser_port = '/dev/ttyUSB0'
 
@@ -244,7 +245,6 @@ while True:
 
         sent_index = sent_index if valid_data_received else sent_index + 1  # Use the same index if valid data has been received, else use next index
         sent_index = sent_index % len(sent)  # Ensuring sent_index is within the range
-
 
     ser.close()
     time.sleep(120)
