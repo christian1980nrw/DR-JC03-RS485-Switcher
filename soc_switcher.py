@@ -1,12 +1,11 @@
 import serial
 import time
-import datetime
 import logging
-import ftplib
-import os
 import subprocess
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+debug_output = 0  # Define this if you plan to use it
 
 def chksum_data(str):
     result = 0
@@ -23,6 +22,25 @@ def Lchksum(value):
     chksum = ((n1 + n2 + n3) & 0xF) ^ 0xF
     chksum = chksum + 1
     return value + (chksum << 12)
+
+def process_data(data):
+    if len(data) < 10:
+        print("Invalid data length.")
+        return
+    
+    received_chksum = int(data[-4:], 16)
+    calc_chksum = chksum_data(data[2:-4])
+    
+    if calc_chksum != received_chksum:
+        print("Checksum error. Calculated: {}, Received: {}".format(calc_chksum, received_chksum))
+        return
+
+    print("Checksum is ok.")
+
+    data = data[:-4]
+    for i in range(0, len(data), 4):
+        print("Received 4 bytes of data: " + data[i:i+4])
+
 
 def CID2_decode(CID2):
     if CID2 == '00':
@@ -49,8 +67,19 @@ def CID2_decode(CID2):
 logging.info('--------------------------------')
 HEATER_OFF = 1
 HEATER_ON = 0
+SOC = 0.0
+SOH = 0.0
+capacity = 0.0
+voltage = 0.0
+sent_index = 0
 heater = HEATER_OFF
-sent = b'~22014A42E00201FD28\r'
+sent = [
+    '~22014A42E00201FD28\r',
+    '~22014A4D0000FD8E\r',
+    '~22014A510000FDA0\r',
+    '~22014A47E00201FD23\r',
+    '~22014A42E00201FD28\r'
+]
 ser_port = '/dev/ttyUSB0'
 
 # Wait for the system to be started
@@ -67,8 +96,8 @@ ser = serial.Serial(ser_port, 9600)
 
 HEATER_OFF_SOC_THRESHOLD = 97.5   # Threshold for turning off the heater depending on SOC
 HEATER_ON_SOC_THRESHOLD = 99.75   # Threshold for turning on the heater based on SOC
-HEATER_OFF_VOLT_THRESHOLD = 53.4  # Threshold for turning off the heater depending on voltage
-HEATER_ON_VOLT_THRESHOLD = 54.4   # Threshold for turning on the heater based on voltage
+HEATER_OFF_VOLT_THRESHOLD = 54.7  # Threshold for turning off the heater depending on voltage
+HEATER_ON_VOLT_THRESHOLD = 55.3   # Threshold for turning on the heater based on voltage
 use_SOC_for_control = False       # Flag to determine if SOC should be used for control, set to False to use voltage
 # Note: Use of voltage is recommended because the DR-JC03 sometimes shows wrong SOC values especially if the last full cycle is long ago.
 
@@ -76,125 +105,145 @@ is_turned_on = False  # Flag to track if turn on script has been executed
 is_turned_off = False  # Flag to track if turn off script has been executed
 previous_SOC = 0.0  # Variable to store previous SOC value
 previous_VOLT = 0.0  # Variable to store previous voltage value
-
+valid_data_received = False  # Flag to track if valid data has been received
 
 while True:
-    rcv = ''
-    ser.write(sent)
-    logging.info('Request sent: {}'.format(datetime.datetime.now()))
-    time.sleep(4)
-    while ser.inWaiting() > 0:
+    rcv = ''  # Initialize rcv variable for each new request
+    sent_index = 0 if valid_data_received else sent_index  # Use the same index if valid data has been received
+    valid_data_received = False  # Reset the flag for each new request
+
+    while True:
+        rcv = ''  # Clear rcv variable before receiving new data
+
+        ser.write(sent[sent_index].encode())
+        logging.info('Request sent: {}'.format(sent[sent_index]))
+        time.sleep(4)
+        while ser.inWaiting() > 0:
+            try:
+                chr = ser.read()
+                rcv += chr.decode()
+                if chr == b'\r':
+                    break
+            except:
+                pass
+
+        valid_data = 1
         try:
-            chr = ser.read()
-            rcv += chr.decode()
-            if chr == b'\r':
-                break
+            CID2 = rcv[7:9]
+            if CID2_decode(CID2) == -1:
+                valid_data = -1
         except:
-            pass
-
-    valid_data = 1
-    try:
-        CID2 = rcv[7:9]
-        if CID2_decode(CID2) == -1:
             valid_data = -1
-    except:
-        valid_data = -1
 
-    logging.info('Received data: {}'.format(rcv))
+        logging.info('Received data: {}'.format(rcv))
 
-    try:
-        LENID = int(rcv[9:13], base=16)
-        length = LENID & 0x0FFF
-        if Lchksum(length) == LENID:
-            logging.info('Data length ok.')
+        try:
+            LENID = int(rcv[9:13], base=16)
+            length = LENID & 0x0FFF
+            if Lchksum(length) == LENID:
+                logging.info('Data length ok.')
+            else:
+                logging.error('Data length error.')
+                valid_data = -1
+        except:
+            valid_data = -1
+
+        try:
+            chksum = int(rcv[len(rcv)-5:], base=16)
+            calculated_chksum = chksum_data(rcv[1:len(rcv)-5])
+            if calculated_chksum == chksum:
+                logging.info('Checksum ok.')
+            else:
+                logging.error('Checksum error. Calculated: {}, Received: {}'.format(calculated_chksum, chksum))
+                valid_data = -1
+
+        except Exception as e:
+            logging.error('Exception during checksum calculation: {}'.format(e))
+            valid_data = -1
+
+        if valid_data == 1:
+            valid_data_received = True
+            data = rcv[13:len(rcv)-5]
+            if len(data) >= 118:
+                SOH = int(data[114:118], base=16) / 1
+                SOC = int(data[2:6], base=16) / 100
+                voltage = int(data[6:10], base=16) / 100
+                current = int(data[106:110], base=16)
+                mos_temp = int(data[84:88], base=16) / 10 #98
+                env_temp = int(data[76:80], base=16) / 10 #90
+                cell_temp = int(data[80:84], base=16) / 10 #90
+                temp1 = int(data[90:94], base=16) / 10 #104
+                temp2 = int(data[94:98], base=16) / 10 #108
+                temp3 = int(data[98:102], base=16) / 10 #112
+                temp4 = int(data[102:106], base=16) / 10 #116
+                capacity = int(data[124:128], base=16) / 100 #138
+                if current > 32767:
+                    current = -(32768-(current - 32768))
+                current /= 100
+                logging.info('--------------------------------')
+                logging.info('Capacity:  {}Ah remaining'.format(capacity))
+                logging.info('SOH:       {}%'.format(SOH))
+                logging.info('SOC:       {}%'.format(SOC))
+                logging.info('Voltage:   {}V'.format(voltage))
+                logging.info('Current:   {}A'.format(current))
+                logging.info('MOS Temp:  {}°C'.format(mos_temp))
+                logging.info('Env Temp:  {}°C'.format(env_temp))
+                logging.info('Cell Temp: {}°C'.format(cell_temp))
+                logging.info('Temp 1:    {}°C'.format(temp1))
+                logging.info('Temp 2:    {}°C'.format(temp2))
+                logging.info('Temp 3:    {}°C'.format(temp3))
+                logging.info('Temp 4:    {}°C'.format(temp4))
+                logging.info('--------------------------------')
+                # Extract cell voltages
+                cell_voltages = []
+                for i in range(1, 17):
+                    cell_voltage = int(data[(i - 1) * 4 + 12: i * 4 + 12], base=16) / 1000
+                    cell_voltages.append(cell_voltage)
+                    logging.info('Cell {}: {}V'.format(i, cell_voltage))
+            else:
+                logging.error('Invalid data format: SOH not found')
+                continue
+
+            # Check if the heater is already off based on SOC or voltage
+            if (heater == HEATER_OFF) and (previous_SOC > HEATER_OFF_SOC_THRESHOLD) and (previous_VOLT > HEATER_OFF_VOLT_THRESHOLD) and (use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD) and not is_turned_off:
+                logging.info('Heater OFF.')
+                is_turned_off = True
+                subprocess.call("/data/turnoff.sh", shell=True)  # Turn off the heater using shell script
+                logging.info('is_turned_off: {}'.format(is_turned_off))
+
+            # Check if the heater is already on based on SOC or voltage
+            elif (heater == HEATER_ON) and (previous_SOC < HEATER_ON_SOC_THRESHOLD) and (previous_VOLT < HEATER_ON_VOLT_THRESHOLD) and (use_SOC_for_control and SOC >= HEATER_ON_SOC_THRESHOLD) or (not use_SOC_for_control and voltage >= HEATER_ON_VOLT_THRESHOLD) and not is_turned_on:
+                logging.info('Heater ON.')
+                is_turned_on = True
+                subprocess.call("/data/turnon.sh", shell=True)  # Turn on the heater using shell script
+                logging.info('is_turned_on: {}'.format(is_turned_on))
+
+            # Check if the heater needs to be turned off based on SOC or voltage
+            elif (heater == HEATER_ON) and ((use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD)) and not is_turned_off:
+                heater = HEATER_OFF
+                logging.info('Heater OFF.')
+                subprocess.call("/data/turnoff.sh", shell=True)  # Turn off the heater using shell script
+                is_turned_off = True
+                logging.info('is_turned_off: {}'.format(is_turned_off))
+
+            # Check if the heater needs to be turned on based on SOC or voltage
+            elif (heater == HEATER_OFF) and ((use_SOC_for_control and SOC >= HEATER_ON_SOC_THRESHOLD) or (not use_SOC_for_control and voltage >= HEATER_ON_VOLT_THRESHOLD)) and not is_turned_on:
+                heater = HEATER_ON
+                logging.info('Heater ON.')
+                subprocess.call("/data/turnon.sh", shell=True)  # Turn on the heater using shell script
+                is_turned_on = True
+                logging.info('is_turned_on: {}'.format(is_turned_on))
+
+            logging.info('--------------------------------')
+
         else:
-            logging.error('Data length error.')
-            valid_data = -1
-    except:
-        valid_data = -1
+            logging.error('Invalid data.\n----------------------')
 
-    try:
-        chksum = int(rcv[len(rcv)-5:], base=16)
-        if chksum_data(rcv[1:len(rcv)-5]) == chksum:
-            logging.info('Checksum ok.')
-        else:
-            logging.error('Checksum error.')
-            valid_data = -1
-    except:
-        valid_data = -1
+        previous_SOC = SOC  # Store current SOC as previous SOC
+        previous_VOLT = voltage  # Store current voltage as previous voltage
 
-    if valid_data == 1:
-        data = rcv[13:len(rcv)-5]
-        SOC = int(data[2:6], base=16) / 100
-        voltage = int(data[6:10], base=16) / 100
-        current = int(data[106:110], base=16)
-        mos_temp = int(data[84:88], base=16) / 10 #98
-        env_temp = int(data[76:80], base=16) / 10 #90
-        temp1 = int(data[90:94], base=16) / 10 #104
-        temp2 = int(data[94:98], base=16) / 10 #108
-        temp3 = int(data[98:102], base=16) / 10 #112
-        temp4 = int(data[102:106], base=16) / 10 #116
-        capacity = int(data[124:128], base=16) / 100 #138
-        if current > 32767:
-            current = -(32768-(current - 32768))
-        current /= 100
-        logging.info('--------------------------------')
-        logging.info('Capacity: {}Ah remaining'.format(capacity))
-        logging.info('SOC:      {}%'.format(SOC))
-        logging.info('Voltage:  {}V'.format(voltage))
-        logging.info('Current:  {}A'.format(current))
-        logging.info('MOS Temp: {}°C'.format(mos_temp))
-        logging.info('Env Temp: {}°C'.format(env_temp))
-        logging.info('Temp 1:   {}°C'.format(temp1))
-        logging.info('Temp 2:   {}°C'.format(temp2))
-        logging.info('Temp 3:   {}°C'.format(temp3))
-        logging.info('Temp 4:   {}°C'.format(temp4))
-        logging.info('--------------------------------')
-        # Extract cell voltages
-        cell_voltages = []
-        for i in range(1, 17):
-            cell_voltage = int(data[(i - 1) * 4 + 12: i * 4 + 12], base=16) / 1000
-            cell_voltages.append(cell_voltage)
-            logging.info('Cell {}: {}V'.format(i, cell_voltage))
-            
-        # Check if the heater is already off based on SOC or voltage
-        if (heater == HEATER_OFF) and (previous_SOC > HEATER_OFF_SOC_THRESHOLD) and (previous_VOLT > HEATER_OFF_VOLT_THRESHOLD) and (use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD) and not is_turned_off:
-            logging.info('Heater OFF.')
-            is_turned_off = True
-            subprocess.call("/data/turnoff.sh", shell=True)  # Turn off the heater using shell script
-            logging.info('is_turned_off: {}'.format(is_turned_off))
+        sent_index = sent_index + 1 if not valid_data_received else 0  # Move to the next index in the sent list
 
-        # Check if the heater is already on based on SOC or voltage
-        elif (heater == HEATER_ON) and (previous_SOC < HEATER_ON_SOC_THRESHOLD) and (previous_VOLT < HEATER_ON_VOLT_THRESHOLD) and (use_SOC_for_control and SOC >= HEATER_ON_SOC_THRESHOLD) or (not use_SOC_for_control and voltage >= HEATER_ON_VOLT_THRESHOLD) and not is_turned_on:
-            logging.info('Heater ON.')
-            is_turned_on = True
-            subprocess.call("/data/turnon.sh", shell=True)  # Turn on the heater using shell script
-            logging.info('is_turned_on: {}'.format(is_turned_on))
-
-        # Check if the heater needs to be turned off based on SOC or voltage
-        elif (heater == HEATER_ON) and ((use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD)) and not is_turned_off:
-            heater = HEATER_OFF
-            logging.info('Heater OFF.')
-            subprocess.call("/data/turnoff.sh", shell=True)  # Turn off the heater using shell script
-            is_turned_off = True
-            logging.info('is_turned_off: {}'.format(is_turned_off))
-
-        # Check if the heater needs to be turned on based on SOC or voltage
-        elif (heater == HEATER_OFF) and ((use_SOC_for_control and SOC >= HEATER_ON_SOC_THRESHOLD) or (not use_SOC_for_control and voltage >= HEATER_ON_VOLT_THRESHOLD)) and not is_turned_on:
-            heater = HEATER_ON
-            logging.info('Heater ON.')
-            subprocess.call("/data/turnon.sh", shell=True)  # Turn on the heater using shell script
-            is_turned_on = True
-            logging.info('is_turned_on: {}'.format(is_turned_on))
-
-        logging.info('--------------------------------')
-
-    else:
-        logging.info('Invalid data.\n----------------------')
-
-    previous_SOC = SOC  # Store current SOC as previous SOC
-    previous_VOLT = voltage  # Store current voltage as previous voltage
-
-ser.close()
-time.sleep(120)
-#os.system('reboot')
+    ser.close()
+    time.sleep(120)
+    #os.system('reboot')
