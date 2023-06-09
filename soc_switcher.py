@@ -66,7 +66,7 @@ def CID2_decode(CID2):
 
 logging.info('--------------------------------')
 HEATER_OFF = 1
-HEATER_ON = 0
+HEATER_ON = 1
 SOC = 0.0
 SOH = 0.0
 capacity = 0.0
@@ -75,8 +75,8 @@ sent_index = 0
 heater = HEATER_OFF
 sent = [
     '~22014A42E00201FD28\r',
-    '~22014A42E00201FD28\r'
-    '~22014A42E00201FD28\r' # Try 3 times the normal request, maybe there was only a fragmented packet.
+    '~22014A42E00201FD28\r',
+    '~22014A42E00201FD28\r', # Try 3 times the normal request, maybe there was only a fragmented packet.
     '~22014A4D0000FD8E\r', # Use 3 different requests like the original windows software is doing (maybe BMS reset?)
     '~22014A510000FDA0\r',
     '~22014A47E00201FD23\r', # start from the beginning after this
@@ -95,15 +95,15 @@ time.sleep(2)
 # Open the serial port for communication
 ser = serial.Serial(ser_port, 9600)
 
-HEATER_OFF_SOC_THRESHOLD = 97.5   # Threshold for turning off the heater depending on SOC
+HEATER_OFF_SOC_THRESHOLD = 95.5   # Threshold for turning off the heater depending on SOC
 HEATER_ON_SOC_THRESHOLD = 99.75   # Threshold for turning on the heater based on SOC
 HEATER_OFF_VOLT_THRESHOLD = 54.7  # Threshold for turning off the heater depending on voltage
 HEATER_ON_VOLT_THRESHOLD = 55.3   # Threshold for turning on the heater based on voltage
-use_SOC_for_control = False       # Flag to determine if SOC should be used for control, set to False to use voltage
+use_SOC_for_control = True       # Flag to determine if SOC should be used for control, set to False to use voltage
 # Note: Use of voltage is recommended because the DR-JC03 sometimes shows wrong SOC values especially if the last full cycle is long ago.
 
-is_turned_on = False  # Flag to track if turn on script has been executed
-is_turned_off = False  # Flag to track if turn off script has been executed
+is_turned_on = True  # Flag to track if turn on script has been executed
+is_turned_off = True  # Flag to track if turn off script has been executed
 previous_SOC = 0.0  # Variable to store previous SOC value
 previous_VOLT = 0.0  # Variable to store previous voltage value
 valid_data_received = False  # Flag to track if valid data has been received
@@ -205,40 +205,44 @@ while True:
                 logging.error('Invalid data format: SOH not found')
                 continue
 
-            # Check if the heater is already off based on SOC or voltage
-            if (heater == HEATER_OFF) and (previous_SOC > HEATER_OFF_SOC_THRESHOLD) and (previous_VOLT > HEATER_OFF_VOLT_THRESHOLD) and (use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD) and not is_turned_off:
-                logging.info('Heater OFF.')
-                is_turned_off = True
-                subprocess.call("/data/turnoff.sh", shell=True)  # Turn off the heater using shell script
-                logging.info('is_turned_off: {}'.format(is_turned_off))
+        # Check if the heater is already off based on SOC or voltage
+        if (heater == HEATER_OFF) and ((use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD)) and not is_turned_off:
+            logging.info('Heater OFF.')
+            is_turned_off = True
+            is_turned_on = False  # Reset is_turned_on flag
+            subprocess.call("/data/turnoff.sh", shell=True)  # Turn off the heater using shell script
+            logging.info('is_turned_off: {}'.format(is_turned_off))
 
-            # Check if the heater is already on based on SOC or voltage
-            elif (heater == HEATER_ON) and (previous_SOC < HEATER_ON_SOC_THRESHOLD) and (previous_VOLT < HEATER_ON_VOLT_THRESHOLD) and (use_SOC_for_control and SOC >= HEATER_ON_SOC_THRESHOLD) or (not use_SOC_for_control and voltage >= HEATER_ON_VOLT_THRESHOLD) and not is_turned_on:
-                logging.info('Heater ON.')
-                is_turned_on = True
-                subprocess.call("/data/turnon.sh", shell=True)  # Turn on the heater using shell script
-                logging.info('is_turned_on: {}'.format(is_turned_on))
+        # Check if the heater is already on based on SOC or voltage
+        elif (heater == HEATER_ON) and ((use_SOC_for_control and SOC >= HEATER_ON_SOC_THRESHOLD) or (not use_SOC_for_control and voltage >= HEATER_ON_VOLT_THRESHOLD)) and not is_turned_on:
+            logging.info('Heater ON.')
+            is_turned_on = True
+            is_turned_off = False  # Reset is_turned_off flag
+            subprocess.call("/data/turnon.sh", shell=True)  # Turn on the heater using shell script
+            logging.info('is_turned_on: {}'.format(is_turned_on))
 
-            # Check if the heater needs to be turned off based on SOC or voltage
-            elif (heater == HEATER_ON) and ((use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD)) and not is_turned_off:
-                heater = HEATER_OFF
-                logging.info('Heater OFF.')
-                subprocess.call("/data/turnoff.sh", shell=True)  # Turn off the heater using shell script
-                is_turned_off = True
-                logging.info('is_turned_off: {}'.format(is_turned_off))
+        # Check if the heater needs to be turned off based on SOC or voltage
+        elif (heater == HEATER_ON) and ((use_SOC_for_control and SOC <= HEATER_OFF_SOC_THRESHOLD) or (not use_SOC_for_control and voltage <= HEATER_OFF_VOLT_THRESHOLD)) and is_turned_on:
+            heater = HEATER_OFF
+            logging.info('Heater OFF.')
+            subprocess.call("/data/turnoff.sh", shell=True)  # Turn off the heater using shell script
+            is_turned_off = True
+            is_turned_on = False
+            logging.info('is_turned_off: {}'.format(is_turned_off))
 
-            # Check if the heater needs to be turned on based on SOC or voltage
-            elif (heater == HEATER_OFF) and ((use_SOC_for_control and SOC >= HEATER_ON_SOC_THRESHOLD) or (not use_SOC_for_control and voltage >= HEATER_ON_VOLT_THRESHOLD)) and not is_turned_on:
-                heater = HEATER_ON
-                logging.info('Heater ON.')
-                subprocess.call("/data/turnon.sh", shell=True)  # Turn on the heater using shell script
-                is_turned_on = True
-                logging.info('is_turned_on: {}'.format(is_turned_on))
+        # Check if the heater needs to be turned on based on SOC or voltage
+        elif (heater == HEATER_OFF) and ((use_SOC_for_control and SOC >= HEATER_ON_SOC_THRESHOLD) or (not use_SOC_for_control and voltage >= HEATER_ON_VOLT_THRESHOLD)) and is_turned_off:
+            heater = HEATER_ON
+            logging.info('Heater ON.')
+            subprocess.call("/data/turnon.sh", shell=True)  # Turn on the heater using shell script
+            is_turned_on = True
+            is_turned_off = False
+            logging.info('is_turned_on: {}'.format(is_turned_on))
 
             logging.info('--------------------------------')
 
         else:
-            logging.error('Invalid data.\n----------------------')
+            logging.info('--------------------------------')
 
         previous_SOC = SOC  # Store current SOC as previous SOC
         previous_VOLT = voltage  # Store current voltage as previous voltage
