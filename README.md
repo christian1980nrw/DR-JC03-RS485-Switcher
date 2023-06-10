@@ -1,6 +1,9 @@
 # DR-JC03-RS485-Switcher
 Script that reads out SOC, voltage and current of a DR-JC03 BMS / Protocol DR-1363 (RS485 with the delivered RJ45 Adapter)
 and turns on switchable sockets depending voltage or SOC.
+# Please note: 
+There are different firmware versions on this BMS. If your battery shows DR-POWER under BMS version, this script should be compatible.
+I have another battery that displays DR-JC03, unfortunately it does not respond to the commands in a legible way.
 
 ![grafik](https://github.com/christian1980nrw/DR-JC03-RS485-Switcher/assets/6513794/8cc9173c-1791-4d81-96e5-1301a4ce5d55)
 
